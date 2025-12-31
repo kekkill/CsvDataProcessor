@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "fcK1dyXzOek=",
+  "dgSpecHash": "tA2yPQlZzto=",
   "success": true,
-  "projectFilePath": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия\\WinFormsApp1\\CsvDataProcess.csproj",
+  "projectFilePath": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия — копия\\WinFormsApp1\\CsvDataProcess.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\PC\\.nuget\\packages\\azure.core\\1.25.0\\azure.core.1.25.0.nupkg.sha512",
     "C:\\Users\\PC\\.nuget\\packages\\azure.identity\\1.7.0\\azure.identity.1.7.0.nupkg.sha512",

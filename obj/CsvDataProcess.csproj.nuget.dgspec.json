@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия\\WinFormsApp1\\CsvDataProcess.csproj": {}
+    "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия — копия\\WinFormsApp1\\CsvDataProcess.csproj": {}
   },
   "projects": {
-    "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия\\WinFormsApp1\\CsvDataProcess.csproj": {
+    "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия — копия\\WinFormsApp1\\CsvDataProcess.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия\\WinFormsApp1\\CsvDataProcess.csproj",
+        "projectUniqueName": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия — копия\\WinFormsApp1\\CsvDataProcess.csproj",
         "projectName": "CsvDataProcess",
-        "projectPath": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия\\WinFormsApp1\\CsvDataProcess.csproj",
+        "projectPath": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия — копия\\WinFormsApp1\\CsvDataProcess.csproj",
         "packagesPath": "C:\\Users\\PC\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия\\WinFormsApp1\\obj\\",
+        "outputPath": "C:\\Users\\PC\\Desktop\\iba3_last_rev — копия — копия\\WinFormsApp1\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "D:\\Microsoft Visual Studio\\Shared\\NuGetPackages"

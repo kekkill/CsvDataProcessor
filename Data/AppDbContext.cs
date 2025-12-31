@@ -1,4 +1,5 @@
 using CsvDataProcessor.Domain;
+using CsvDataProcessor.Configuration;
 using Microsoft.EntityFrameworkCore;
 
 namespace CsvDataProcessor.Data
@@ -9,7 +10,8 @@ namespace CsvDataProcessor.Data
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=CsvAppDatabase;Trusted_Connection=true;");
+            string connectionString = AppConfiguration.GetDefaultConnectionString();
+            optionsBuilder.UseSqlServer(connectionString);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

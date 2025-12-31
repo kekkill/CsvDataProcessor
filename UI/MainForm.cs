@@ -1,7 +1,7 @@
-﻿using CsvDataProcessor.Data;
+﻿using CsvDataProcessor.Services.Import;
+using CsvDataProcessor.Data;
 using CsvDataProcessor.Services.Database;
 using CsvDataProcessor.Services.Export;
-using CsvDataProcessor.Services.Import;
 
 namespace CsvDataProcessor.UI
 {
@@ -85,32 +85,54 @@ namespace CsvDataProcessor.UI
 
         private async void btnExportExcel_Click(object sender, EventArgs e)
         {
+            if (!ValidateFilters()) return;
+
+            var (success, filePath) = await ShowExportDialog("Excel", "xlsx");
+            if (!success) return;
+
+            await ExportDataAsync(
+                parameters => new ExportService().ExportToExcelAsync(parameters, filePath),
+                "Экспорт в Excel"
+            );
+        }
+
+        private async void btnExportXml_Click(object sender, EventArgs e)
+        {
+            if (!ValidateFilters()) return;
+
+            var (success, filePath) = await ShowExportDialog("XML", "xml");
+            if (!success) return;
+
+            await ExportDataAsync(
+                parameters => new ExportService().ExportToXmlAsync(parameters, filePath),
+                "Экспорт в XML"
+            );
+        }
+
+        private async Task<(bool success, string filePath)> ShowExportDialog(string format, string extension)
+        {
             SaveFileDialog saveFileDialog = new SaveFileDialog();
-            saveFileDialog.Filter = "Excel Files (*.xlsx)|*.xlsx|All Files (*.*)|*.*";
-            saveFileDialog.Title = "Сохранить как Excel";
+            saveFileDialog.Filter = $"{format} Files (*.{extension})|*.{extension}|All Files (*.*)|*.*";
+            saveFileDialog.Title = $"Сохранить как {format}";
             saveFileDialog.RestoreDirectory = true;
-            saveFileDialog.FileName = $"export_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+            saveFileDialog.FileName = $"export_{DateTime.Now:yyyyMMddHHmmss}.{extension}";
 
-            if (saveFileDialog.ShowDialog() != DialogResult.OK)
-            {
-                return;
-            }
+            return saveFileDialog.ShowDialog() == DialogResult.OK
+                ? (true, saveFileDialog.FileName)
+                : (false, null);
+        }
 
-            string filePath = saveFileDialog.FileName;
-
+        private async Task ExportDataAsync(Func<ExportParameters, Task> exportMethod, string operationName)
+        {
             progressBar.Visible = true;
             progressBar.Style = ProgressBarStyle.Marquee;
             progressBar.MarqueeAnimationSpeed = 30;
             btnExportExcel.Enabled = false;
-            lblStatus.Text = "Подготовка данных...";
+            btnExportXml.Enabled = false;
+            lblStatus.Text = $"Подготовка данных для {operationName.ToLower()}...";
 
             try
             {
-                if (!ValidateFilters())
-                {
-                    return;
-                }
-
                 var parameters = new ExportParameters
                 {
                     UseStartDate = chkStartDate.Checked,
@@ -124,74 +146,18 @@ namespace CsvDataProcessor.UI
                     Country = txtCountry.Text
                 };
 
-                var exportService = new ExportService();
-                await exportService.ExportToExcelAsync(parameters, filePath);
-                MessageBox.Show($"Данные экспортированы в:\n{filePath}", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                lblStatus.Text = "";
+                await exportMethod(parameters);
+
+                MessageBox.Show($"Данные успешно экспортированы!", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка экспорта: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Ошибка {operationName.ToLower()}: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 progressBar.Visible = false;
                 btnExportExcel.Enabled = true;
-            }
-        }
-
-        private async void btnExportXml_Click(object sender, EventArgs e)
-        {
-            SaveFileDialog saveFileDialog = new SaveFileDialog();
-            saveFileDialog.Filter = "XML Files (*.xml)|*.xml|All Files (*.*)|*.*";
-            saveFileDialog.Title = "Сохранить как XML";
-            saveFileDialog.RestoreDirectory = true;
-            saveFileDialog.FileName = $"export_{DateTime.Now:yyyyMMddHHmmss}.xml";
-
-            if (saveFileDialog.ShowDialog() != DialogResult.OK)
-            {
-                return;
-            }
-
-            string filePath = saveFileDialog.FileName;
-
-            progressBar.Visible = true;
-            progressBar.Style = ProgressBarStyle.Marquee;
-            progressBar.MarqueeAnimationSpeed = 30;
-            btnExportXml.Enabled = false;
-            lblStatus.Text = "Подготовка данных...";
-
-            try
-            {
-                if (!ValidateFilters())
-                {
-                    return;
-                }
-
-                var parameters = new ExportParameters
-                {
-                    UseStartDate = chkStartDate.Checked,
-                    StartDate = dtpStartDate.Value,
-                    UseEndDate = chkEndDate.Checked,
-                    EndDate = dtpEndDate.Value,
-                    FirstName = txtFirstName.Text,
-                    LastName = txtLastName.Text,
-                    SurName = txtSurName.Text,
-                    City = txtCity.Text,
-                    Country = txtCountry.Text
-                };
-
-                var exportService = new ExportService();
-                await exportService.ExportToXmlAsync(parameters, filePath);
-                MessageBox.Show($"Данные экспортированы в:\n{filePath}", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка экспорта: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                progressBar.Visible = false;
                 btnExportXml.Enabled = true;
             }
         }
