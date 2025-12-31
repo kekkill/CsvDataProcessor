@@ -1,7 +1,7 @@
-﻿using CsvDataProcess.Data;
-using CsvDataProcess.Domain;
+﻿using CsvDataProcessor.Data;
+using CsvDataProcessor.Domain;
 
-namespace CsvDataProcess.Services.Database
+namespace CsvDataProcessor.Services.Database
 {
     public class PersonService
     {

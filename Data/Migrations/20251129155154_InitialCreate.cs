@@ -1,9 +1,8 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace WinFormsApp1.Migrations
+namespace CsvDataProcessor.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

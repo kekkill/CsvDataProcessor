@@ -1,133 +1,130 @@
-using CsvDataProcess.Data;
-using CsvDataProcess.Domain;
+using CsvDataProcessor.Data;
+using CsvDataProcessor.Domain;
 using Microsoft.VisualBasic.FileIO;
 using System.Text;
 
-namespace CsvDataProcess.Services.Import
+namespace CsvDataProcessor.Services.Import
 {
     public class CsvImporter
     {
-        public static async Task<(int successCount, int errorCount)> ImportCsvToDatabaseAsync(string filePath, AppDbContext context, IProgress<int> progress)
+        public static async Task<(int successCount, int errorCount)> ImportCsvToDatabaseAsync(string filePath, AppDbContext context, IProgress<string> progress)
         {
             int successCount = 0;
             int errorCount = 0;
             int processedLines = 0;
-            int totalLinesEstimate = 0;
-            var peopleBatch = new List<Person>();
-            string[] firstLineFields = null;
-            bool hasHeader = false;
+            var peopleBatch = new List<Person>(1000);
 
-            using (var reader = new StreamReader(filePath, Encoding.UTF8))
+            using var reader = new StreamReader(filePath, Encoding.UTF8);
+            using var parser = new TextFieldParser(reader)
             {
-                while (await reader.ReadLineAsync() != null)
-                {
-                    totalLinesEstimate++;
-                }
-            }
+                Delimiters = new[] { ";" },
+                HasFieldsEnclosedInQuotes = true,
+                TrimWhiteSpace = true
+            };
 
-            using (var reader = new StreamReader(filePath, Encoding.UTF8))
-            using (var parser = new TextFieldParser(reader))
+            bool hasHeader = CheckForHeader(parser);
+            if (hasHeader) processedLines++;
+
+            while (!parser.EndOfData)
             {
-                parser.Delimiters = new string[] { ";" };
-                parser.HasFieldsEnclosedInQuotes = true;
-                parser.TrimWhiteSpace = true;
-
-                if (!parser.EndOfData)
+                try
                 {
-                    firstLineFields = parser.ReadFields();
+                    string[] fields = parser.ReadFields();
                     processedLines++;
 
-                    if (firstLineFields != null && firstLineFields.Length > 0)
-                    {
-                        string headerCheck = firstLineFields[0].Trim().ToLower();
-
-                        if (headerCheck.Contains("date") || headerCheck.Contains("дата") ||
-                            headerCheck.Contains("firstname") || headerCheck.Contains("имя") ||
-                            headerCheck.Contains("lastname") || headerCheck.Contains("фамилия"))
-                        {
-                            hasHeader = true;
-                            firstLineFields = null; 
-                        }
-                    }
-                }
-
-                while (!parser.EndOfData || firstLineFields != null)
-                {
-                    try
-                    {
-                        string[] fields;
-
-                        if (firstLineFields != null)
-                        {
-                            fields = firstLineFields;
-                            firstLineFields = null;
-                        }
-                        else
-                        {
-                            fields = parser.ReadFields();
-                            processedLines++;
-                        }
-
-                        if (fields == null || fields.Length < 6)
-                        {
-                            errorCount++;
-                            continue;
-                        }
-
-                        DateTime parsedDate;
-                        if (!DateTime.TryParse(fields[0].Trim(), out parsedDate))
-                        {
-                            errorCount++;
-                            continue;
-                        }
-
-                        var person = new Person
-                        {
-                            Date = parsedDate.Date,
-                            FirstName = fields[1].Trim(),
-                            LastName = fields[2].Trim(),
-                            SurName = fields.Length > 3 ? fields[3].Trim() : "",
-                            City = fields.Length > 4 ? fields[4].Trim() : "",
-                            Country = fields.Length > 5 ? fields[5].Trim() : ""
-                        };
-
-                        if (string.IsNullOrEmpty(person.FirstName) || string.IsNullOrEmpty(person.LastName))
-                        {
-                            errorCount++;
-                            continue;
-                        }
-
-                        peopleBatch.Add(person);
-                        successCount++;
-
-                        if (peopleBatch.Count >= 1000)
-                        {
-                            await context.People.AddRangeAsync(peopleBatch);
-                            await context.SaveChangesAsync();
-                            peopleBatch.Clear();
-                            context.ChangeTracker.Clear(); 
-                        }
-
-                        if (progress != null && totalLinesEstimate > 0)
-                        {
-                            int percent = (int)((double)processedLines / totalLinesEstimate * 100);
-                            progress.Report(Math.Min(percent, 100));
-                        }
-                    }
-                    catch
+                    if (fields == null || fields.Length < 6)
                     {
                         errorCount++;
+                        continue;
                     }
+
+                    var person = ParsePerson(fields);
+                    if (person == null)
+                    {
+                        errorCount++;
+                        continue;
+                    }
+
+                    peopleBatch.Add(person);
+
+                    if (peopleBatch.Count >= 1000)
+                    {
+                        var (batchSuccess, batchError) = await SaveBatchAsync(context, peopleBatch);
+                        successCount += batchSuccess;
+                        errorCount += batchError;
+                        peopleBatch.Clear();
+
+                        progress?.Report($"Обработано: {processedLines:N0} | Успешно: {successCount:N0} | Ошибок: {errorCount:N0}");
+                    }
+                }
+                catch
+                {
+                    errorCount++;
                 }
             }
 
             if (peopleBatch.Count > 0)
             {
-                await context.People.AddRangeAsync(peopleBatch);
-                await context.SaveChangesAsync();
+                var (batchSuccess, batchError) = await SaveBatchAsync(context, peopleBatch);
+                successCount += batchSuccess;
+                errorCount += batchError;
             }
 
+            progress?.Report($"Завершено: {processedLines:N0} строк | Успешно: {successCount:N0} | Ошибок: {errorCount:N0}");
             return (successCount, errorCount);
+        }
+
+        private static bool CheckForHeader(TextFieldParser parser)
+        {
+            if (parser.EndOfData) return false;
+
+            string[] firstLine = parser.ReadFields();
+            if (firstLine == null || firstLine.Length == 0) return false;
+
+            string firstField = firstLine[0].Trim().ToLowerInvariant();
+            return firstField.Contains("date") ||
+                   firstField.Contains("дата") ||
+                   firstField.Contains("surname") ||
+                   firstField.Contains("страна");
+        }
+
+        private static Person ParsePerson(string[] fields)
+        {
+            if (!DateTime.TryParse(fields[0].Trim(), out DateTime parsedDate))
+                return null;
+
+            var person = new Person
+            {
+                Date = parsedDate.Date,
+                FirstName = fields[1].Trim(),
+                LastName = fields[2].Trim(),
+                SurName = fields.Length > 3 ? fields[3].Trim() : "",
+                City = fields.Length > 4 ? fields[4].Trim() : "",
+                Country = fields.Length > 5 ? fields[5].Trim() : ""
+            };
+
+            return string.IsNullOrWhiteSpace(person.FirstName) ||
+                   string.IsNullOrWhiteSpace(person.LastName)
+                   ? null
+                   : person;
+        }
+
+        private static async Task<(int successCount, int errorCount)> SaveBatchAsync(AppDbContext context, List<Person> batch)
+        {
+            try
+            {
+                await context.People.AddRangeAsync(batch);
+                await context.SaveChangesAsync();
+                return (batch.Count, 0);
+            }
+            catch
+            {
+                return (0, batch.Count);
+            }
+            finally
+            {
+                context.ChangeTracker.Clear();
+            }
         }
     }
 }

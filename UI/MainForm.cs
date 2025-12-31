@@ -1,9 +1,9 @@
-﻿using CsvDataProcess.Services.Import;
-using CsvDataProcess.Data;
-using CsvDataProcess.Services.Database;
-using CsvDataProcess.Services.Export;
+﻿using CsvDataProcessor.Data;
+using CsvDataProcessor.Services.Database;
+using CsvDataProcessor.Services.Export;
+using CsvDataProcessor.Services.Import;
 
-namespace WinFormsApp1
+namespace CsvDataProcessor.UI
 {
     public partial class MainForm : Form
     {
@@ -53,20 +53,22 @@ namespace WinFormsApp1
             }
 
             progressBar.Visible = true;
-            progressBar.Value = 0;
+            progressBar.Style = ProgressBarStyle.Marquee;
+            progressBar.MarqueeAnimationSpeed = 30;
             btnImport.Enabled = false;
+            lblStatus.Text = "Начало импорта...";
 
             try
             {
-                Progress<int> progress = new Progress<int>(percent =>
+                Progress<string> progress = new Progress<string>(status =>
                 {
-                    progressBar.Value = percent;
-                    lblStatus.Text = $"Прогресс: {percent}%";
+                    lblStatus.Text = status;
                 });
+
                 using (var context = new AppDbContext())
                 {
                     var result = await CsvImporter.ImportCsvToDatabaseAsync(filePath, context, progress);
-                    MessageBox.Show($"Импорт завершён!\nУспешно: {result.successCount}\nОшибок: {result.errorCount}", "Результат", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show($"Импорт завершён!\nУспешно: {result.successCount:N0}\nОшибок: {result.errorCount:N0}", "Результат", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     UpdateRecordCount();
                 }
             }
@@ -100,24 +102,32 @@ namespace WinFormsApp1
             progressBar.Style = ProgressBarStyle.Marquee;
             progressBar.MarqueeAnimationSpeed = 30;
             btnExportExcel.Enabled = false;
+            lblStatus.Text = "Подготовка данных...";
 
             try
             {
-                bool useStartDate = chkStartDate.Checked;
-                bool useEndDate = chkEndDate.Checked;
-                DateTime startDate = dtpStartDate.Value;
-                DateTime endDate = dtpEndDate.Value;
-
-                using (var context = new AppDbContext())
+                if (!ValidateFilters())
                 {
-                    var personService = new PersonService(context);
-                    var exportService = new ExportService();
-
-                    var query = personService.GetFilteredPeople(useStartDate, startDate, useEndDate, endDate, txtFirstName.Text, txtLastName.Text, txtSurName.Text, txtCity.Text, txtCountry.Text);
-
-                    await exportService.ExportToExcelAsync(query, filePath);
-                    MessageBox.Show($"Данные экспортированы в:\n{filePath}", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
                 }
+
+                var parameters = new ExportParameters
+                {
+                    UseStartDate = chkStartDate.Checked,
+                    StartDate = dtpStartDate.Value,
+                    UseEndDate = chkEndDate.Checked,
+                    EndDate = dtpEndDate.Value,
+                    FirstName = txtFirstName.Text,
+                    LastName = txtLastName.Text,
+                    SurName = txtSurName.Text,
+                    City = txtCity.Text,
+                    Country = txtCountry.Text
+                };
+
+                var exportService = new ExportService();
+                await exportService.ExportToExcelAsync(parameters, filePath);
+                MessageBox.Show($"Данные экспортированы в:\n{filePath}", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblStatus.Text = "";
             }
             catch (Exception ex)
             {
@@ -133,10 +143,10 @@ namespace WinFormsApp1
         private async void btnExportXml_Click(object sender, EventArgs e)
         {
             SaveFileDialog saveFileDialog = new SaveFileDialog();
-            saveFileDialog.Filter = "XML Files|*.xml|All Files|*.*";
+            saveFileDialog.Filter = "XML Files (*.xml)|*.xml|All Files (*.*)|*.*";
             saveFileDialog.Title = "Сохранить как XML";
             saveFileDialog.RestoreDirectory = true;
-            saveFileDialog.FileName = "export.xml";
+            saveFileDialog.FileName = $"export_{DateTime.Now:yyyyMMddHHmmss}.xml";
 
             if (saveFileDialog.ShowDialog() != DialogResult.OK)
             {
@@ -146,26 +156,34 @@ namespace WinFormsApp1
             string filePath = saveFileDialog.FileName;
 
             progressBar.Visible = true;
-            progressBar.Value = 0;
+            progressBar.Style = ProgressBarStyle.Marquee;
+            progressBar.MarqueeAnimationSpeed = 30;
             btnExportXml.Enabled = false;
+            lblStatus.Text = "Подготовка данных...";
 
             try
             {
-                bool useStartDate = chkStartDate.Checked;
-                bool useEndDate = chkEndDate.Checked;
-                DateTime startDate = dtpStartDate.Value;
-                DateTime endDate = dtpEndDate.Value;
-
-                using (var context = new AppDbContext())
+                if (!ValidateFilters())
                 {
-                    var personService = new PersonService(context);
-                    var exportService = new ExportService();
-
-                    var query = personService.GetFilteredPeople(useStartDate, startDate, useEndDate, endDate, txtFirstName.Text, txtLastName.Text, txtSurName.Text, txtCity.Text, txtCountry.Text);
-
-                    await exportService.ExportToXmlAsync(query, filePath);
-                    MessageBox.Show($"Данные экспортированы в:\n{filePath}", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
                 }
+
+                var parameters = new ExportParameters
+                {
+                    UseStartDate = chkStartDate.Checked,
+                    StartDate = dtpStartDate.Value,
+                    UseEndDate = chkEndDate.Checked,
+                    EndDate = dtpEndDate.Value,
+                    FirstName = txtFirstName.Text,
+                    LastName = txtLastName.Text,
+                    SurName = txtSurName.Text,
+                    City = txtCity.Text,
+                    Country = txtCountry.Text
+                };
+
+                var exportService = new ExportService();
+                await exportService.ExportToXmlAsync(parameters, filePath);
+                MessageBox.Show($"Данные экспортированы в:\n{filePath}", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -211,6 +229,29 @@ namespace WinFormsApp1
         private void chkEndDate_CheckedChanged(object sender, EventArgs e)
         {
             dtpEndDate.Enabled = chkEndDate.Checked;
+        }
+
+        private bool ValidateFilters()
+        {
+            if (chkStartDate.Checked && chkEndDate.Checked &&
+                dtpStartDate.Value > dtpEndDate.Value)
+            {
+                MessageBox.Show("Начальная дата не может быть больше конечной!\n" +
+                                "Пожалуйста, исправьте даты.",
+                    "Ошибка валидации",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+
+                dtpEndDate.Value = dtpStartDate.Value.AddDays(1);
+                chkEndDate.Checked = true;
+
+                lblStatus.Text = "Исправлено: конечная дата установлена позже начальной";
+                lblStatus.ForeColor = Color.Red;
+                lblStatus.Visible = true;
+
+                return false;
+            }
+            return true;
         }
     }
 }

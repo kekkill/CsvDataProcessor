@@ -1,4 +1,4 @@
-namespace WinFormsApp1
+namespace CsvDataProcessor.UI
 {
     internal static class Program
     {

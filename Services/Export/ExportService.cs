@@ -1,29 +1,31 @@
 ﻿using ClosedXML.Excel;
-using CsvDataProcess.Domain;
+using CsvDataProcessor.Data;
+using CsvDataProcessor.Services.Database;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
+using System.Xml;
 
-namespace CsvDataProcess.Services.Export
+namespace CsvDataProcessor.Services.Export
 {
+    public class ExportParameters
+    {
+        public bool UseStartDate { get; set; }
+        public DateTime StartDate { get; set; }
+        public bool UseEndDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string SurName { get; set; }
+        public string City { get; set; }
+        public string Country { get; set; }
+    }
+
     public class ExportService
     {
-        public async Task ExportToExcelAsync(IQueryable<Person> query, string filePath)
+        public async Task ExportToExcelAsync(ExportParameters parameters, string filePath)
         {
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
-                var people = query.AsNoTracking().ToList();
-
-                if (people.Count == 0)
-                {
-                    throw new Exception("Нет данных для экспорта по выбранным фильтрам");
-                }
-
-                if (people.Count > 1000000)
-                {
-                    throw new Exception($"Слишком много данных для экспорта в Excel (максимум 1 000 000 записей).\n" +
-                                        $"Сейчас выбрано: {people.Count:N0}\n" +
-                                        $"Пожалуйста, сузьте фильтры.");
-                }
-
                 using var workbook = new XLWorkbook();
                 var worksheet = workbook.Worksheets.Add("Данные");
 
@@ -37,79 +39,108 @@ namespace CsvDataProcess.Services.Export
                 var headerRange = worksheet.Range(1, 1, 1, 6);
                 headerRange.Style.Font.Bold = true;
                 headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
-                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; 
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
                 int row = 2;
-                foreach (var person in people)
+                const int pageSize = 1000;
+                int page = 0;
+
+                await using var context = new AppDbContext();
+                var personService = new PersonService(context);
+                var baseQuery = personService.GetFilteredPeople(
+                    parameters.UseStartDate, parameters.StartDate,
+                    parameters.UseEndDate, parameters.EndDate,
+                    parameters.FirstName, parameters.LastName,
+                    parameters.SurName, parameters.City, parameters.Country
+                );
+
+                while (true)
                 {
-                    worksheet.Cell(row, 1).Value = person.Date;
-                    worksheet.Cell(row, 1).Style.DateFormat.Format = "dd.MM.yyyy";
+                    var batch = await baseQuery
+                        .Skip(page * pageSize)
+                        .Take(pageSize)
+                        .ToListAsync();
 
-                    worksheet.Cell(row, 2).Value = person.FirstName;
-                    worksheet.Cell(row, 3).Value = person.LastName;
-                    worksheet.Cell(row, 4).Value = person.SurName;
-                    worksheet.Cell(row, 5).Value = person.City;
-                    worksheet.Cell(row, 6).Value = person.Country;
+                    if (batch.Count == 0) break;
 
-                    row++;
+                    foreach (var person in batch)
+                    {
+                        worksheet.Cell(row, 1).Value = person.Date;
+                        worksheet.Cell(row, 1).Style.DateFormat.Format = "dd.MM.yyyy";
+                        worksheet.Cell(row, 2).Value = person.FirstName;
+                        worksheet.Cell(row, 3).Value = person.LastName;
+                        worksheet.Cell(row, 4).Value = person.SurName;
+                        worksheet.Cell(row, 5).Value = person.City;
+                        worksheet.Cell(row, 6).Value = person.Country;
+                        row++;
+                    }
+                    page++;
                 }
+
+                if (row == 2)
+                    throw new Exception("Нет данных для экспорта по выбранным фильтрам");
 
                 worksheet.Columns().AdjustToContents();
-
-                if (row > 2) 
-                {
-                    worksheet.Range(1, 1, row - 1, 6).SetAutoFilter();
-                }
-
+                if (row > 2) worksheet.Range(1, 1, row - 1, 6).SetAutoFilter();
                 worksheet.SheetView.FreezeRows(1);
 
                 workbook.SaveAs(filePath);
             });
         }
 
-        public async Task ExportToXmlAsync(IQueryable<Person> query, string filePath)
+        public async Task ExportToXmlAsync(ExportParameters parameters, string filePath)
         {
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
-                var people = query.AsNoTracking().ToList();
-
-                if (people.Count == 0)
-                {
-                    throw new Exception("Нет данных для экспорта по выбранным фильтрам");
-                }
-
-                var settings = new System.Xml.XmlWriterSettings
+                var settings = new XmlWriterSettings
                 {
                     Indent = true,
-                    Encoding = System.Text.Encoding.UTF8,
+                    Encoding = Encoding.UTF8,
                     IndentChars = "  "
                 };
 
-                using (System.Xml.XmlWriter writer = System.Xml.XmlWriter.Create(filePath, settings))
-                {
-                    writer.WriteStartDocument();
-                    writer.WriteStartElement("TestProgram");
+                using var writer = XmlWriter.Create(filePath, settings);
+                writer.WriteStartDocument();
+                writer.WriteStartElement("TestProgram");
 
-                    int id = 1;
-                    foreach (var person in people)
+                await using var context = new AppDbContext();
+                var personService = new PersonService(context);
+                var query = personService.GetFilteredPeople(
+                    parameters.UseStartDate, parameters.StartDate,
+                    parameters.UseEndDate, parameters.EndDate,
+                    parameters.FirstName, parameters.LastName,
+                    parameters.SurName, parameters.City, parameters.Country
+                );
+
+                int id = 1;
+                var asyncEnumerator = query.AsAsyncEnumerable().GetAsyncEnumerator();
+                try
+                {
+                    while (await asyncEnumerator.MoveNextAsync())
                     {
+                        var person = asyncEnumerator.Current;
                         writer.WriteStartElement("Record");
                         writer.WriteAttributeString("id", id.ToString());
-
                         writer.WriteElementString("Date", person.Date.ToString("yyyy-MM-dd"));
                         writer.WriteElementString("FirstName", person.FirstName);
                         writer.WriteElementString("LastName", person.LastName);
                         writer.WriteElementString("SurName", person.SurName);
                         writer.WriteElementString("City", person.City);
                         writer.WriteElementString("Country", person.Country);
-
                         writer.WriteEndElement();
                         id++;
                     }
-
-                    writer.WriteEndElement();
-                    writer.WriteEndDocument();
                 }
+                finally
+                {
+                    await asyncEnumerator.DisposeAsync();
+                }
+
+                if (id == 1)
+                    throw new Exception("Нет данных для экспорта по выбранным фильтрам");
+
+                writer.WriteEndElement();
+                writer.WriteEndDocument();
             });
         }
     }

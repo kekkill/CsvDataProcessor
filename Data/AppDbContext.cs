@@ -1,7 +1,7 @@
-using CsvDataProcess.Domain;
+using CsvDataProcessor.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace CsvDataProcess.Data
+namespace CsvDataProcessor.Data
 {
     public class AppDbContext : DbContext
     {
@@ -22,7 +22,14 @@ namespace CsvDataProcess.Data
 
         public void InitializeDatabase()
         {
-            Database.EnsureCreated();
+            if (!Database.CanConnect())
+            {
+                Database.EnsureCreated();
+            }
+            else
+            {
+                Database.Migrate();
+            }
         }
     }
 }

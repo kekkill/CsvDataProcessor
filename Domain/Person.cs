@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace CsvDataProcess.Domain
+namespace CsvDataProcessor.Domain
 {
     public class Person
     {
